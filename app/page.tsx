@@ -157,7 +157,27 @@ export default function Home() {
                   ? `Failed (${autoLoginError ?? "unknown error"})`
                   : "Idle"}
           </p>
-          <div className="flex gap-2 text-xs">
+          <div className="flex flex-wrap gap-2 text-xs">
+            <button
+              type="button"
+              className={`rounded-full border px-3 py-1 ${
+                apiBaseUrl === getDefaultApiBase("staging")
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-200 bg-white text-slate-900"
+              }`}
+              onClick={() => {
+                const base = getDefaultApiBase("staging");
+                // Clear existing token when switching environments
+                setAuthToken("");
+                localStorage.removeItem("mindflow-token");
+                localStorage.removeItem("mindflow-token-api-base");
+                // Set new API base URL (this will trigger auto-login)
+                setApiBaseUrl(base);
+                localStorage.setItem("mindflow-api-base", base);
+              }}
+            >
+              Use Staging API
+            </button>
             <button
               type="button"
               className={`rounded-full border px-3 py-1 ${
@@ -167,11 +187,9 @@ export default function Home() {
               }`}
               onClick={() => {
                 const base = getDefaultApiBase("dev");
-                // Clear existing token when switching environments
                 setAuthToken("");
                 localStorage.removeItem("mindflow-token");
                 localStorage.removeItem("mindflow-token-api-base");
-                // Set new API base URL (this will trigger auto-login)
                 setApiBaseUrl(base);
                 localStorage.setItem("mindflow-api-base", base);
               }}
@@ -237,20 +255,30 @@ export default function Home() {
   );
 }
 
-function getDefaultApiBase(env: "dev" | "local") {
+function getDefaultApiBase(env: "staging" | "dev" | "local") {
   if (env === "local") {
     return "https://localhost:7046";
   }
 
-  try {
-    const url = new URL(
-      "https://mindflowai-ducfdehcc0cqaebq.centralindia-01.azurewebsites.net/swagger/index.html",
+  if (env === "dev") {
+    return sanitizeSwaggerUrl(
+      "https://mindflowai-dev-g8g3eqd9avgscgc5.centralindia-01.azurewebsites.net/swagger/index.html",
     );
+  }
+
+  return sanitizeSwaggerUrl(
+    "https://mindflowai-ducfdehcc0cqaebq.centralindia-01.azurewebsites.net/swagger/index.html",
+  );
+}
+
+function sanitizeSwaggerUrl(urlString: string) {
+  try {
+    const url = new URL(urlString);
     url.pathname = "/";
     url.search = "";
     url.hash = "";
     return url.toString().replace(/\/$/, "");
   } catch {
-    return "https://mindflowai-ducfdehcc0cqaebq.centralindia-01.azurewebsites.net";
+    return urlString.replace(/\/$/, "");
   }
 }
