@@ -44,12 +44,14 @@ jobs:
           if [ -d .next ]; then cp -R .next release/.next; fi
           if [ -d public ]; then cp -R public release/public; fi
           if [ -d node_modules ]; then cp -R node_modules release/node_modules; fi
+          cd release
+          zip -r ../release.zip .
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: nextjs-app
-          path: release
+          path: release.zip
 
   deploy:
     runs-on: ubuntu-latest
@@ -63,7 +65,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: nextjs-app
-          path: release
+          path: .
       
       - name: Login to Azure
         uses: azure/login@v2
@@ -78,5 +80,5 @@ jobs:
         with:
           app-name: 'MindflowAIUI'
           slot-name: 'Production'
-          package: ./release
+          package: release.zip
           
