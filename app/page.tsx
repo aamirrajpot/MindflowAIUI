@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import BrainDumpPanel from "./components/BrainDumpPanel";
 import TasksPanel from "./components/TasksPanel";
 import WellnessPanel from "./components/WellnessPanel";
@@ -32,13 +32,10 @@ export default function Home() {
     return getDefaultApiBase("local");
   });
 
-  const credentials = useMemo(
-    () => ({
-      userNameOrEmail: "user@mindflowai.com",
-      password: "User@123",
-    }),
-    [],
-  );
+  const [credentials, setCredentials] = useState({
+    userNameOrEmail: "user@mindflowai.com",
+    password: "User@123",
+  });
 
   // Load stored API base URL and token on mount
   useEffect(() => {
@@ -57,17 +54,9 @@ export default function Home() {
     }
   }, []);
 
-  // Auto-login when API base URL changes or token is missing/invalid
-  useEffect(() => {
-    if (!apiBaseUrl) return;
-
-    const storedTokenApiBase = localStorage.getItem("mindflow-token-api-base");
-    const needsLogin = !authToken || storedTokenApiBase !== apiBaseUrl;
-
-    if (!needsLogin) return;
-
-    const controller = new AbortController();
-    const performLogin = async () => {
+  const loginWithCredentials = useCallback(
+    async (controller?: AbortController) => {
+      if (!apiBaseUrl) return;
       setAutoLoginStatus("loading");
       setAutoLoginError(null);
       try {
@@ -75,7 +64,7 @@ export default function Home() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(credentials),
-          signal: controller.signal,
+          signal: controller?.signal,
         });
 
         if (!res.ok) {
@@ -88,26 +77,36 @@ export default function Home() {
           throw new Error("Token missing from response");
         }
 
-        // Store token along with the API base URL it belongs to
         localStorage.setItem("mindflow-token", data.access_token);
         localStorage.setItem("mindflow-token-api-base", apiBaseUrl);
         setAuthToken(data.access_token);
         setAutoLoginStatus("success");
       } catch (err) {
-        if (controller.signal.aborted) return;
+        if (controller?.signal.aborted) return;
         setAutoLoginStatus("error");
         setAutoLoginError(err instanceof Error ? err.message : "Auto login failed");
-        // Clear token on error
         setAuthToken("");
         localStorage.removeItem("mindflow-token");
         localStorage.removeItem("mindflow-token-api-base");
       }
-    };
+    },
+    [apiBaseUrl, credentials],
+  );
 
-    performLogin();
+  // Auto-login when API base URL changes or token is missing/invalid
+  useEffect(() => {
+    if (!apiBaseUrl) return;
+
+    const storedTokenApiBase = localStorage.getItem("mindflow-token-api-base");
+    const needsLogin = !authToken || storedTokenApiBase !== apiBaseUrl;
+
+    if (!needsLogin) return;
+
+    const controller = new AbortController();
+    loginWithCredentials(controller);
 
     return () => controller.abort();
-  }, [apiBaseUrl, authToken, credentials]);
+  }, [apiBaseUrl, authToken, loginWithCredentials]);
 
   const handleTokenChange = (value: string) => {
     setAuthToken(value);
@@ -137,26 +136,62 @@ export default function Home() {
         </div>
 
         <div className="w-full lg:max-w-md space-y-3">
-          <label className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-            Bearer token
-            <input
-              type="text"
-              placeholder="Paste JWT here"
-              className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-900 focus:ring-0"
-              value={authToken}
-              onChange={(event) => handleTokenChange(event.target.value)}
-            />
-          </label>
-          <p className="mt-2 text-xs text-slate-500">
-            Auto login status:{" "}
-            {autoLoginStatus === "loading"
-              ? "Signing in…"
-              : autoLoginStatus === "success"
-                ? "Ready"
-                : autoLoginStatus === "error"
-                  ? `Failed (${autoLoginError ?? "unknown error"})`
-                  : "Idle"}
-          </p>
+          <div className="flex flex-col gap-3 rounded-2xl border border-slate-100 p-3">
+            <label className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+              Demo email
+              <input
+                type="email"
+                placeholder="user@mindflowai.com"
+                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-900 focus:ring-0"
+                value={credentials.userNameOrEmail}
+                onChange={(event) =>
+                  setCredentials((prev) => ({ ...prev, userNameOrEmail: event.target.value }))
+                }
+              />
+            </label>
+            <label className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+              Demo password
+              <input
+                type="password"
+                placeholder="••••••••"
+                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-900 focus:ring-0"
+                value={credentials.password}
+                onChange={(event) =>
+                  setCredentials((prev) => ({ ...prev, password: event.target.value }))
+                }
+              />
+            </label>
+            <label className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+              Bearer token
+              <input
+                type="text"
+                placeholder="Paste JWT here"
+                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-900 focus:ring-0"
+                value={authToken}
+                onChange={(event) => handleTokenChange(event.target.value)}
+              />
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+            <p>
+              Auto login status:{" "}
+              {autoLoginStatus === "loading"
+                ? "Signing in…"
+                : autoLoginStatus === "success"
+                  ? "Ready"
+                  : autoLoginStatus === "error"
+                    ? `Failed (${autoLoginError ?? "unknown error"})`
+                    : "Idle"}
+            </p>
+            <button
+              type="button"
+              className="rounded-full border border-slate-200 px-3 py-1 font-semibold text-slate-900 transition hover:border-slate-900"
+              disabled={autoLoginStatus === "loading"}
+              onClick={() => loginWithCredentials()}
+            >
+              Demo user
+            </button>
+          </div>
           <div className="flex flex-wrap gap-2 text-xs">
             <button
               type="button"
